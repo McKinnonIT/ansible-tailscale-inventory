@@ -166,46 +166,57 @@ def assemble_inventory(
     for host_data in tailscale_hosts:
         # We intentionally avoid adding any the funnel-ingress-node to the inventory
         # because we can't manage it
-        if host_data["HostName"] == "funnel-ingress-node":
+        host_name = host_data.get("HostName")
+        if not host_name or host_name == "funnel-ingress-node":
             continue
 
         # We ignore endpoints that have no OS, like Mullvad exit nodes
-        if not host_data["OS"]:
+        current_os = host_data.get("OS")
+        if not current_os:
             continue
 
         # We add each host to the list of all hosts
-        inventory["groups"]["all"].append(host_data["HostName"])
+        inventory["groups"]["all"].append(host_name)
+
+        # Determine ansible_host value
+        ansible_host_ip = None
+        tailscale_ips_list = host_data.get("TailscaleIPs")
+        if tailscale_ips_list and len(tailscale_ips_list) > 0:
+            ansible_host_ip = tailscale_ips_list[0]
 
         # Set host's inventory metadata
-        inventory["metadata"][host_data["HostName"]] = {
-            "ansible_host": host_data["DNSName"],
-            "tailscale_ips": host_data["TailscaleIPs"],
+        inventory["metadata"][host_name] = {
+            "ansible_host": ansible_host_ip,
+            "tailscale_ips": tailscale_ips_list if tailscale_ips_list else [],
         }
 
         # Hosts that are offline will still be present in the inventory. We set-up these
         # groups so host patterns can be used to skip offline hosts. We could omit the
         # offline hosts entirely but there may be use cases where one does want to see
         # an error if they attempt to connect to an offline host
-        if host_data["Online"]:
-            inventory["groups"]["online"].append(host_data["HostName"])
+        is_online = host_data.get("Online")
+        if is_online:
+            inventory["groups"]["online"].append(host_name)
         else:
-            inventory["groups"]["offline"].append(host_data["HostName"])
+            inventory["groups"]["offline"].append(host_name)
 
         # If we encounter an OS type we don't have in the inventory yet, we create a
         # group for it, then we always add each host to the group for that OS
-        if host_data["OS"] not in inventory["groups"]:
-            inventory["groups"][host_data["OS"]] = []
-        inventory["groups"][host_data["OS"]].append(host_data["HostName"])
+        # current_os is already safely fetched and checked for existence
+        if current_os not in inventory["groups"]:
+            inventory["groups"][current_os] = []
+        inventory["groups"][current_os].append(host_name)
 
         # We create groups for host tags. Tag names have to be modified to be compatible
         # with ansible
-        if "Tags" in host_data:
-            for tag in host_data["Tags"]:
+        tags_list = host_data.get("Tags")
+        if tags_list:
+            for tag in tags_list:
                 safe_tag = tag.replace(":", "_").replace("-", "_")
                 if safe_tag in inventory["groups"]:
-                    inventory["groups"][safe_tag].append(host_data["HostName"])
+                    inventory["groups"][safe_tag].append(host_name)
                 else:
-                    inventory["groups"][safe_tag] = [host_data["HostName"]]
+                    inventory["groups"][safe_tag] = [host_name]
 
     return inventory
 
