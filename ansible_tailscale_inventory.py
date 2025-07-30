@@ -159,7 +159,7 @@ def assemble_inventory(
             "all": [],
             "online": [],
             "offline": [],
-            "self": [tailscale_self_hostname],
+            "self": [tailscale_self_hostname.lower()],
         },
     }
 
@@ -169,6 +169,9 @@ def assemble_inventory(
         host_name = host_data.get("HostName")
         if not host_name or host_name == "funnel-ingress-node":
             continue
+
+        # Convert hostname to lowercase
+        host_name = host_name.lower()
 
         # We ignore endpoints that have no OS, like Mullvad exit nodes
         current_os = host_data.get("OS")
@@ -246,7 +249,7 @@ def tailscale_status_to_ansible_inventory(
     """
 
     ts_all_hosts = assemble_all_tailscale_hosts(ts_status)
-    inventory = assemble_inventory(ts_all_hosts, ts_status["Self"]["HostName"])
+    inventory = assemble_inventory(ts_all_hosts, ts_status["Self"]["HostName"].lower())
     return format_ansible_inventory(inventory)
 
 
